@@ -290,3 +290,28 @@ fn losing_focus_while_composing_commits_the_composition() {
         });
     });
 }
+
+#[test]
+fn shift_clicking_while_composing_commits_the_composition_first() {
+    App::test((), |mut app| async move {
+        let _guard = FeatureFlag::ImeMarkedText.override_enabled(true);
+        let (_window, editor_view) = initialize_editor(&mut app);
+
+        editor_view.update(&mut app, |view, ctx| {
+            view.handle_action(&CodeEditorViewAction::UserTyped(UserInput::new("ab")), ctx);
+        });
+        set_marked_text(&editor_view, "ni", &mut app);
+        // Without a preceding SelectionStart, SelectionUpdate extends the selection (shift-click).
+        editor_view.update(&mut app, |view, ctx| {
+            view.handle_action(
+                &CodeEditorViewAction::SelectionUpdate(CharOffset::from(1)),
+                ctx,
+            );
+        });
+
+        editor_view.read(&app, |view, ctx| {
+            assert_eq!(view.ime_marked_text, None);
+            assert_eq!(view.text(ctx).as_str(), "abni");
+        });
+    });
+}

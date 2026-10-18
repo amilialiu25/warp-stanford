@@ -823,9 +823,15 @@ impl TypedActionView for CodeEditorView {
             return;
         }
 
+        // Mouse actions that move the cursor while a composition is live. Keyboard movement is
+        // already consumed by the IME while it is composing.
         if matches!(
             action,
-            SelectWord { .. } | SelectLine { .. } | SelectionStart { .. }
+            SelectWord { .. }
+                | SelectLine { .. }
+                | SelectionStart { .. }
+                | SelectionUpdate(_)
+                | RightMouseDown { .. }
         ) {
             self.commit_ime_marked_text(ctx);
         }
