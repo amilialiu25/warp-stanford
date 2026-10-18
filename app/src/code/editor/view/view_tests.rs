@@ -3,15 +3,18 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use pathfinder_geometry::vector::vec2f;
+use string_offset::CharOffset;
 use warp_core::features::FeatureFlag;
 use warp_core::ui::appearance::Appearance;
 use warp_editor::render::element::VerticalExpansionBehavior;
 use warp_util::user_input::UserInput;
 use warpui::elements::ScrollbarWidth;
 use warpui::elements::new_scrollable::ScrollableAppearance;
+use warpui::event::ModifiersState;
 use warpui::platform::WindowStyle;
 use warpui::{
-    App, EntityIdSet, Presenter, TypedActionView, ViewHandle, WindowId, WindowInvalidation,
+    App, BlurContext, EntityIdSet, Presenter, TypedActionView, View, ViewHandle, WindowId,
+    WindowInvalidation,
 };
 
 use super::{CodeEditorRenderOptions, CodeEditorView, CodeEditorViewAction};
@@ -104,7 +107,7 @@ fn set_marked_text(editor_view: &ViewHandle<CodeEditorView>, text: &str, app: &m
 }
 
 #[test]
-fn ime_marked_text_is_shown_without_editing_the_buffer() {
+fn ime_composition_does_not_edit_the_buffer() {
     App::test((), |mut app| async move {
         let _guard = FeatureFlag::ImeMarkedText.override_enabled(true);
         let (_window, editor_view) = initialize_editor(&mut app);
@@ -240,5 +243,50 @@ fn platform_ime_events_reach_the_code_editor() {
             ctx.simulate_window_event(warpui::Event::ClearMarkedText, window_id, presenter);
         });
         editor_view.read(&app, |view, _ctx| assert_eq!(view.ime_marked_text, None));
+    });
+}
+
+#[test]
+fn clicking_while_composing_commits_the_composition_first() {
+    App::test((), |mut app| async move {
+        let _guard = FeatureFlag::ImeMarkedText.override_enabled(true);
+        let (_window, editor_view) = initialize_editor(&mut app);
+
+        editor_view.update(&mut app, |view, ctx| {
+            view.handle_action(&CodeEditorViewAction::UserTyped(UserInput::new("ab")), ctx);
+        });
+        set_marked_text(&editor_view, "ni", &mut app);
+        editor_view.update(&mut app, |view, ctx| {
+            view.handle_action(
+                &CodeEditorViewAction::SelectionStart {
+                    offset: CharOffset::from(1),
+                    modifiers: ModifiersState::default(),
+                },
+                ctx,
+            );
+        });
+
+        editor_view.read(&app, |view, ctx| {
+            assert_eq!(view.ime_marked_text, None);
+            assert_eq!(view.text(ctx).as_str(), "abni");
+        });
+    });
+}
+
+#[test]
+fn losing_focus_while_composing_commits_the_composition() {
+    App::test((), |mut app| async move {
+        let _guard = FeatureFlag::ImeMarkedText.override_enabled(true);
+        let (_window, editor_view) = initialize_editor(&mut app);
+
+        set_marked_text(&editor_view, "ni", &mut app);
+        editor_view.update(&mut app, |view, ctx| {
+            view.on_blur(&BlurContext::SelfBlurred, ctx);
+        });
+
+        editor_view.read(&app, |view, ctx| {
+            assert_eq!(view.ime_marked_text, None);
+            assert_eq!(view.text(ctx).as_str(), "ni");
+        });
     });
 }

@@ -2105,6 +2105,19 @@ impl CodeEditorView {
         .finish()
     }
 
+    /// Inserts any uncommitted IME composition as-is, matching the terminal input editor when the
+    /// cursor moves or focus leaves mid-composition. The platform IME is told to drop its own
+    /// composition so it doesn't later commit a candidate at the new cursor.
+    fn commit_ime_marked_text(&mut self, ctx: &mut ViewContext<Self>) {
+        if let Some(marked_text) = self.ime_marked_text.take() {
+            self.model.update(ctx, |model, ctx| {
+                model.user_insert(&marked_text, ctx);
+            });
+            ctx.discard_ime_composition(self.window_id);
+            ctx.notify();
+        }
+    }
+
     fn clear_ime_marked_text(&mut self, ctx: &mut ViewContext<Self>) {
         if self.ime_marked_text.take().is_some() {
             ctx.notify();
@@ -2494,7 +2507,7 @@ impl View for CodeEditorView {
 
     fn on_blur(&mut self, blur_ctx: &BlurContext, ctx: &mut ViewContext<Self>) {
         if blur_ctx.is_self_blurred() {
-            self.ime_marked_text = None;
+            self.commit_ime_marked_text(ctx);
             ctx.notify();
         }
     }

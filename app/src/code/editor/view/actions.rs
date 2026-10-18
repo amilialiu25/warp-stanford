@@ -823,6 +823,13 @@ impl TypedActionView for CodeEditorView {
             return;
         }
 
+        if matches!(
+            action,
+            SelectWord { .. } | SelectLine { .. } | SelectionStart { .. }
+        ) {
+            self.commit_ime_marked_text(ctx);
+        }
+
         match action {
             UserTyped(content) => self.user_insert(content, ctx),
             SetMarkedText(marked_text) => self.set_ime_marked_text(marked_text, ctx),
